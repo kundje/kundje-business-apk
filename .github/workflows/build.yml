@@ -1,0 +1,33 @@
+name: Gerar APK Android
+
+on:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aceder ao Código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Instalar Ferramenta Bubblewrap da Google
+        run: npm install -g @bubblewrap/cli
+
+      - name: Gerar Chave de Assinatura (Keystore)
+        run: |
+          keytool -genkey -v -keystore android.keystore -alias android -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Kundje, OU=Tech, O=Kundje, L=Muembe, ST=Niassa, C=MZ"
+
+      - name: Construir o APK Oficial
+        run: bubblewrap build --manifest ./twa-manifest.json
+
+      - name: Guardar o Ficheiro APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-signed
+          path: app-release-signed.apk
