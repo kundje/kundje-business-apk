@@ -1,17 +1,39 @@
+
 {
   "host": "kundjebusiness.netlify.app",
   "name": "Kundje Business",
-  "shortName": "KundjeBiz",
+  "launcherName": "KundjeBiz",
+  "packageId": "com.kundje.business.app",
   "startUrl": "/",
   "display": "standalone",
+  "orientation": "default",
   "themeColor": "#087c48",
+  "themeColorDark": "#0b1015",
+  "navigationColor": "#087c48",
+  "navigationColorDark": "#0b1015",
+  "navigationDividerColor": "#087c48",
+  "navigationDividerColorDark": "#0b1015",
   "backgroundColor": "#ffffff",
+  "enableNotifications": false,
+  "enableSiteSettingsShortcut": true,
+  "splashScreenFadeOutDuration": 300,
   "iconUrl": "https://kundjebusiness.netlify.app/icon.png",
-  "packageId": "com.kundje.business.app",
-  "launcherName": "Kundje Business",
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "minSdkVersion": 23,
   "signingKey": {
     "path": "android.keystore",
     "alias": "android"
   },
-  "generator": "Bubblewrap"
+  "shortcuts": [],
+  "generatorApp": "Bubblewrap",
+  "fallbackType": "customtabs",
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "features": {},
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
 }
