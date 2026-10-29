@@ -23,6 +23,9 @@ jobs:
         run: |
           bubblewrap update --manifest ./twa-manifest.json || true
           bubblewrap build --manifest ./twa-manifest.json --skip-signing-validation || true
+          
+          # Localiza qualquer APK gerado e copia para a raiz com o nome correto
+          find . -name "*.apk" ! -name "*unaligned*" -exec cp {} ./app-release-signed.apk \;
 
       - name: Guardar o Ficheiro APK
         uses: actions/upload-artifact@v4
