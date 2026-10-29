@@ -1,263 +1,329 @@
-# TAREFA: CORRIGIR DEFINITIVAMENTE O WORKFLOW GITHUB ACTIONS PARA COMPILAR O APK DO KUNDJE BUSINESS
-
-Actua como um engenheiro sénior especializado em Android, Trusted Web Activity (TWA), Google Bubblewrap CLI, Gradle, Android SDK, Node.js e automação CI/CD com GitHub Actions.
-
-Tens de analisar e corrigir directamente o meu repositório GitHub `kundje-business-apk`, de modo a produzir um ficheiro APK Android real, válido, instalável e disponível para transferência nos artefactos do GitHub Actions.
-
-**Não quero apenas recomendações, exemplos ou um novo ficheiro YAML sem validação. Quero que inspecciones os ficheiros existentes, identifiques a causa do erro, implementes as correcções necessárias e verifiques o resultado.**
-
-## 1. Contexto do projecto
-
-Nome da aplicação: Kundje Business.
-
-Site publicado: https://kundjebusiness.netlify.app
-
-Repositório GitHub: `kundje-business-apk`.
-
-Ficheiro de configuração TWA: `twa-manifest.json`, localizado na raiz do repositório.
-
-Workflow principal: `.github/workflows/build.yml`.
-
-Tecnologias utilizadas:
-- Netlify para alojar a aplicação web.
-- Firebase Firestore para os dados da aplicação.
-- Node.js e `@bubblewrap/cli` para criar o projecto Android.
-- GitHub Actions com runners Linux `ubuntu-latest`.
-- JDK e Android SDK para compilar o projecto através do Gradle.
-
-O objectivo é empacotar o site existente numa aplicação Android através de Trusted Web Activity (TWA), sem substituir nem danificar a aplicação web.
-
-Compatibilidade pretendida: Android 6.0, Android 7.x e Android 8.x, desde que o dispositivo disponha de um navegador compatível com TWA.
-
-## 2. Problema actual
-
-Já tentei corrigir o workflow várias vezes.
-
-Na primeira tentativa, a execução falhou com o código de saída 130, porque o processo dependia de interacção manual na linha de comandos.
-
-Depois, adicionei `actions/setup-java` com Eclipse Temurin JDK 17.
-
-Apesar disso, o workflow passou a terminar com um visto verde, mas o artefacto obtido tinha apenas cerca de 160 bytes, em vez de conter um APK Android verdadeiro.
-
-Não aceito como concluído um workflow que apenas termina sem erros aparentes ou que publica ficheiros vazios, páginas HTML de erro, ficheiros de metadados ou qualquer outro conteúdo que não seja um APK válido.
-
-## 3. Primeira fase: diagnóstico obrigatório
-
-Antes de alterar o projecto, inspecciona:
-
-- O conteúdo actual de `.github/workflows/build.yml`.
-- O ficheiro `twa-manifest.json`.
-- Os ficheiros `package.json` e `package-lock.json`, se existirem.
-- A estrutura Android gerada pelo Bubblewrap.
-- Os ficheiros Gradle e o Gradle Wrapper.
-- Os caminhos de saída do APK e do AAB.
-- A configuração da chave de assinatura.
-- Os logs das execuções anteriores, quando estiverem disponíveis.
-
-Determina exactamente por que razão o artefacto tem 160 bytes.
-
-Investiga especialmente:
-
-1. Se o processo de compilação está realmente a executar.
-2. Se o Android SDK está instalado no runner.
-3. Se as licenças do Android SDK foram aceites.
-4. Se o JDK instalado é compatível com as ferramentas utilizadas.
-5. Se o Bubblewrap está a ser executado no directório correcto.
-6. Se o workflow está a publicar o ficheiro correcto.
-7. Se os caminhos dos artefactos correspondem aos ficheiros produzidos pelo Gradle ou pelo Bubblewrap.
-8. Se existem prompts interactivos, erros de assinatura ou falhas de dependências ocultados nos logs.
-
-Não presumir que `--non-interactive` é uma opção válida. Verificar primeiro os comandos e as opções suportados pela versão instalada do Bubblewrap.
-
-## 4. Segunda fase: corrigir o ambiente de compilação
-
-Actualiza o ficheiro `.github/workflows/build.yml` mantendo as funcionalidades úteis do workflow existente.
-
-O ambiente deve configurar explicitamente:
-
-- Checkout do repositório.
-- Node.js numa versão suportada pela versão seleccionada do Bubblewrap.
-- Eclipse Temurin JDK 17, quando compatível com as versões efectivamente utilizadas.
-- Android SDK Command-line Tools.
-- Android SDK Platform Tools.
-- As plataformas e versões de Build Tools exigidas pelo projecto.
-- As licenças necessárias do Android SDK.
-- As dependências Node.js, quando necessárias.
-- A execução do Gradle com as permissões e configurações correctas.
-
-Utiliza versões estáveis e compatíveis das GitHub Actions, verificando a documentação oficial actual antes de escolher versões.
-
-Podes utilizar uma acção própria para instalar o Android SDK, como `android-actions/setup-android`, desde que a respectiva versão seja compatível com o runner.
-
-Não instales pacotes Android obsoletos sem necessidade. Não descarregues nem instales o Android Studio completo se as ferramentas de linha de comandos forem suficientes.
-
-Não alteres versões de Java, Gradle, Android Gradle Plugin ou SDK arbitrariamente. Primeiro identifica as versões compatíveis com os ficheiros existentes.
-
-## 5. Terceira fase: corrigir a compilação TWA
-
-Verifica se o site https://kundjebusiness.netlify.app continua acessível e se a configuração TWA aponta para o domínio correcto.
-
-Confirma o manifesto web e os restantes requisitos necessários para uma TWA funcional.
-
-Depois, executa o processo correcto de geração e compilação Android.
-
-Segue esta prioridade:
-
-1. Reutilizar o projecto Android existente, se estiver íntegro.
-2. Actualizar os ficheiros gerados pelo Bubblewrap quando necessário, sem perder configurações importantes.
-3. Executar o Bubblewrap utilizando comandos e opções oficialmente suportados.
-4. Compilar com o Gradle quando essa abordagem for mais adequada à estrutura existente.
-5. Produzir um APK de lançamento assinado quando existir uma chave de assinatura devidamente configurada.
-6. Produzir, em alternativa, um APK de depuração instalável para testes quando ainda não existir a configuração da assinatura de lançamento.
-
-Não recries o projecto inteiro sem necessidade. Não substituas o `twa-manifest.json` por um manifesto inventado.
-
-A configuração deve ter um `minSdkVersion` compatível com o Android 6.0, API 23, sem quebrar as restantes definições necessárias. Verifica igualmente a compatibilidade do navegador disponível nos dispositivos pretendidos.
-
-## 6. Quarta fase: assinatura e segurança
-
-Verifica a configuração de assinatura definida no projecto.
-
-Se existir uma chave de lançamento, utiliza-a de forma segura através dos GitHub Actions Secrets.
-
-Quando aplicável, utiliza variáveis de ambiente como:
-
-- `BUBBLEWRAP_KEYSTORE_PASSWORD`
-- `BUBBLEWRAP_KEY_PASSWORD`
-
-Ajusta os nomes e as variáveis à configuração real do projecto.
-
-Se for necessário disponibilizar um ficheiro de chave no runner, recupera-o a partir de um segredo protegido e elimina-o do ambiente temporário depois da compilação.
-
-Nunca publiques a chave privada, palavras-passe, tokens ou credenciais do Firebase nos logs ou no repositório.
-
-Não cries uma chave de lançamento diferente em cada execução. Uma nova chave pode impedir que futuras versões actualizem correctamente a aplicação instalada.
-
-Se faltar uma credencial necessária para a assinatura de lançamento, explica exactamente qual é a configuração em falta e disponibiliza um APK de depuração assinado para testes, se o projecto permitir.
-
-Não rotules um APK não assinado como instalável.
-
-## 7. Quinta fase: validar o APK antes de publicar o artefacto
-
-Esta fase é obrigatória.
-
-Depois da compilação, localiza os ficheiros APK efectivamente produzidos. Não assumas que o ficheiro está numa pasta específica sem verificar.
-
-Utiliza ferramentas adequadas para confirmar que o ficheiro é realmente um APK Android, incluindo:
-
-- Verificação de que existe e não está vazio.
-- Verificação de que tem um tamanho plausível e não os 160 bytes anteriores.
-- Teste da integridade do arquivo ZIP.
-- Verificação da presença dos conteúdos Android esperados, incluindo o manifesto compilado.
-- Verificação da assinatura, quando o APK estiver assinado.
-- Verificação do identificador da aplicação e da configuração de compatibilidade, quando as ferramentas disponíveis o permitirem.
-
-Um ficheiro com extensão `.apk` não deve ser considerado válido apenas por causa do seu nome.
-
-Se não existir um APK válido, o workflow deve terminar com erro e indicar a causa. Não deve carregar um artefacto falso ou vazio para produzir um visto verde.
-
-Se a compilação produzir também um AAB válido, podes publicá-lo como artefacto separado.
-
-## 8. Sexta fase: publicar os ficheiros correctos
-
-Configura o workflow para publicar o APK verdadeiro nos artefactos da execução do GitHub Actions.
-
-O resultado deve incluir, conforme o tipo de compilação:
-
-- `kundje-business.apk`: APK assinado de lançamento ou APK de depuração claramente identificado.
-- `app-release-bundle.aab`: opcional, apenas quando tiver sido efectivamente produzido.
-- Logs ou relatórios de diagnóstico úteis, se necessário.
-
-Utiliza os caminhos reais obtidos durante a compilação. Não cries ficheiros com nomes de APK sem conteúdo Android válido.
-
-A publicação do artefacto deve acontecer somente depois de as verificações obrigatórias passarem.
-
-Mantém um resumo da compilação no GitHub Actions que mostre:
-- Resultado da compilação.
-- Tipo de APK produzido.
-- Tamanho do ficheiro.
-- Identificador da aplicação.
-- Estado da validação da assinatura.
-- Caminho do artefacto publicado.
-
-Se faltar uma chave de lançamento, distingue claramente um APK de depuração de uma versão assinada de lançamento.
-
-## 9. Sétima fase: requisitos de Trusted Web Activity
-
-A aplicação deve continuar a abrir o domínio:
-
-https://kundjebusiness.netlify.app
-
-Verifica a configuração Digital Asset Links em:
-
-https://kundjebusiness.netlify.app/.well-known/assetlinks.json
-
-Confirma se o ficheiro existe, se contém JSON válido e se o identificador Android e a impressão digital SHA-256 correspondem à assinatura utilizada.
-
-Não inventes uma impressão digital. Se for necessário actualizar este ficheiro, indica os dados reais que faltam e prepara a configuração de forma segura.
-
-Não declares que a TWA está totalmente verificada se os Digital Asset Links não tiverem sido confirmados.
-
-Atenção: uma TWA continua a apresentar o conteúdo web alojado no Netlify. A criação do APK, por si só, não transforma a aplicação web numa aplicação completamente offline ou independente do serviço alojado.
-
-Não modifiques a aplicação web, as regras do Firebase Firestore ou as definições do Netlify sem que isso seja estritamente necessário para corrigir um requisito da TWA.
-
-## 10. Oitava fase: execução não interactiva e diagnóstico
-
-O workflow tem de funcionar sem depender de confirmações manuais.
-
-Resolve os pedidos de entrada interactivos através das opções oficialmente suportadas, das variáveis de ambiente ou da configuração prévia dos ficheiros necessários.
-
-Se uma etapa falhar, apresenta a mensagem original relevante e identifica a etapa exacta que falhou.
-
-Não ignores os códigos de saída das ferramentas. Não uses comandos que escondam erros para forçar uma execução verde.
-
-Conserva logs úteis para diagnóstico, sem expor segredos.
-
-Se o Bubblewrap falhar, verifica se o projecto Android gerado pode ser compilado directamente pelo Gradle. Não utilizes essa alternativa para contornar falhas sem diagnosticar a causa.
-
-## 11. Testes finais obrigatórios
-
-Executa os testes que forem possíveis no ambiente disponível:
-
-1. Verificar a configuração e a sintaxe do workflow.
-2. Confirmar a instalação do Node.js, JDK e Android SDK.
-3. Confirmar a instalação das dependências e a aceitação das licenças necessárias.
-4. Executar a validação do projecto TWA.
-5. Executar a compilação Android.
-6. Validar o APK resultante.
-7. Confirmar que o ficheiro publicado é o mesmo APK validado.
-8. Verificar se o workflow falha correctamente quando a compilação não produz um APK válido.
-9. Verificar o artefacto gerado e a sua disponibilidade para transferência.
-
-Não afirmes que a aplicação foi testada num dispositivo Android se não tiveres executado esse teste.
-
-## 12. Critérios de aceitação
-
-O trabalho só deve ser considerado concluído quando:
-
-- O workflow estiver actualizado no repositório.
-- A compilação produzir um APK Android real.
-- O APK passar as verificações de integridade.
-- A assinatura estiver validada ou o ficheiro estiver claramente identificado como APK de depuração assinado.
-- O artefacto correcto estiver disponível para transferência.
-- O workflow deixar de considerar bem-sucedidos os builds que produzem apenas ficheiros vazios ou inválidos.
-- As configurações e os segredos sensíveis não forem expostos.
-- Os requisitos TWA que dependem do Netlify estiverem verificados ou claramente identificados como pendentes.
-
-## 13. Resultado que deves apresentar
-
-No final, apresenta um relatório objectivo contendo:
-
-1. Causa identificada do artefacto de 160 bytes.
-2. Ficheiros efectivamente alterados.
-3. Principais correcções implementadas.
-4. Testes realmente executados e resultados.
-5. Localização e tamanho do APK gerado.
-6. Link ou localização do artefacto para transferência.
-7. Estado da assinatura e compatibilidade Android.
-8. Configurações externas ainda necessárias.
-
-Se não conseguires concluir a compilação, não declares o projecto concluído. Apresenta o erro real, o log relevante e a alteração concreta ainda necessária.
-
-**Executa agora estas tarefas directamente no repositório existente. Não te limites a devolver instruções ou um exemplo genérico de workflow.**
+name: Gerar APK Android - Kundje Business
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kundje-business-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Compilar e validar APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Obter código do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Configurar Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Instalar Android SDK e licenças
+        uses: android-actions/setup-android@v4
+        with:
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+          packages: 'platform-tools platforms;android-35 platforms;android-36 build-tools;35.0.0 build-tools;36.0.0'
+
+      - name: Verificar manifesto e disponibilidade do site
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -f "twa-manifest.json" ]]; then
+            echo "ERRO: twa-manifest.json não existe na raiz do repositório."
+            exit 1
+          fi
+
+          node <<'NODE'
+          const fs = require('fs');
+          const m = JSON.parse(fs.readFileSync('twa-manifest.json', 'utf8'));
+          const required = ['host', 'name', 'packageId', 'startUrl', 'iconUrl'];
+          const missing = required.filter((key) => !m[key]);
+          if (missing.length) {
+            console.error(`Campos obrigatórios ausentes em twa-manifest.json: ${missing.join(', ')}`);
+            process.exit(1);
+          }
+          const host = String(m.host).replace(/^https?:\/\//i, '').replace(/\/$/, '').split('/')[0];
+          if (host !== 'kundjebusiness.netlify.app') {
+            console.error(`O host do manifesto é "${host}", mas o site esperado é "kundjebusiness.netlify.app".`);
+            process.exit(1);
+          }
+          if (!/^https:\/\//i.test(m.iconUrl)) {
+            console.error('iconUrl tem de ser um URL HTTPS completo.');
+            process.exit(1);
+          }
+          if (m.minSdkVersion != null && Number(m.minSdkVersion) > 23) {
+            console.error(`minSdkVersion=${m.minSdkVersion} impede a instalação em Android 6.0 (API 23).`);
+            process.exit(1);
+          }
+          console.log(`Aplicação: ${m.name}`);
+          console.log(`Package ID: ${m.packageId}`);
+          console.log(`Host: ${host}`);
+          console.log(`minSdkVersion actual: ${m.minSdkVersion ?? 'não definido; será configurado para 23 no build'}`);
+          NODE
+
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+            https://kundjebusiness.netlify.app/ -o /dev/null
+          echo "Site Netlify acessível."
+
+      - name: Instalar Bubblewrap CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global @bubblewrap/cli@1.27.0
+          bubblewrap --version
+
+      - name: Configurar caminhos do JDK e Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_PATH="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [[ -z "$SDK_PATH" || ! -d "$SDK_PATH" ]]; then
+            echo "ERRO: Android SDK não encontrado."
+            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-não definido}"
+            echo "ANDROID_HOME=${ANDROID_HOME:-não definido}"
+            exit 1
+          fi
+          bubblewrap updateConfig --jdkPath="$JAVA_HOME" --androidSdkPath="$SDK_PATH"
+          bubblewrap doctor
+          echo "ANDROID_SDK_ROOT=$SDK_PATH" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$SDK_PATH" >> "$GITHUB_ENV"
+
+      - name: Preparar manifesto CI e chave de assinatura
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          BUBBLEWRAP_KEYSTORE_PASSWORD: ${{ secrets.BUBBLEWRAP_KEYSTORE_PASSWORD }}
+          BUBBLEWRAP_KEY_PASSWORD: ${{ secrets.BUBBLEWRAP_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+
+          PROJECT_DIR="$RUNNER_TEMP/kundje-business-twa"
+          rm -rf "$PROJECT_DIR"
+          mkdir -p "$PROJECT_DIR"
+          cp twa-manifest.json "$PROJECT_DIR/twa-manifest.json"
+
+          MANIFEST_ALIAS="$(node -e "const m=require('./twa-manifest.json'); process.stdout.write((m.signingKey && m.signingKey.alias) || 'android')")"
+          KEY_ALIAS="${ANDROID_KEY_ALIAS:-$MANIFEST_ALIAS}"
+
+          if [[ -n "$ANDROID_KEYSTORE_BASE64" || -n "$BUBBLEWRAP_KEYSTORE_PASSWORD" || -n "$BUBBLEWRAP_KEY_PASSWORD" ]]; then
+            if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$BUBBLEWRAP_KEYSTORE_PASSWORD" || -z "$BUBBLEWRAP_KEY_PASSWORD" ]]; then
+              echo "ERRO: para uma chave persistente, configura os três secrets: ANDROID_KEYSTORE_BASE64, BUBBLEWRAP_KEYSTORE_PASSWORD e BUBBLEWRAP_KEY_PASSWORD."
+              exit 1
+            fi
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$PROJECT_DIR/android.keystore"
+            STORE_PASS="$BUBBLEWRAP_KEYSTORE_PASSWORD"
+            KEY_PASS="$BUBBLEWRAP_KEY_PASSWORD"
+            keytool -list -keystore "$PROJECT_DIR/android.keystore" -storepass "$STORE_PASS" -alias "$KEY_ALIAS" >/dev/null
+            SIGNING_MODE="persistent"
+            echo "Será usada a chave persistente configurada nos GitHub Secrets."
+          else
+            echo "AVISO: não foi configurada uma chave persistente. Será criada uma chave temporária para testes; futuras compilações não poderão actualizar esta instalação e o fingerprint terá de ser configurado no assetlinks.json."
+            STORE_PASS="$(openssl rand -hex 24)"
+            KEY_PASS="$(openssl rand -hex 24)"
+            umask 077
+            keytool -genkeypair -noprompt -v \
+              -keystore "$PROJECT_DIR/android.keystore" \
+              -alias "$KEY_ALIAS" \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
+              -dname "CN=Kundje Business, OU=Mobile, O=Kundje, L=Lichinga, ST=Niassa, C=MZ"
+            SIGNING_MODE="temporary"
+          fi
+
+          echo "::add-mask::$STORE_PASS"
+          echo "::add-mask::$KEY_PASS"
+          {
+            printf 'PROJECT_DIR=%s\n' "$PROJECT_DIR"
+            printf 'ANDROID_KEY_ALIAS=%s\n' "$KEY_ALIAS"
+            printf 'BUBBLEWRAP_KEYSTORE_PASSWORD=%s\n' "$STORE_PASS"
+            printf 'BUBBLEWRAP_KEY_PASSWORD=%s\n' "$KEY_PASS"
+            printf 'SIGNING_MODE=%s\n' "$SIGNING_MODE"
+          } >> "$GITHUB_ENV"
+
+          export ANDROID_KEY_ALIAS="$KEY_ALIAS"
+          export PROJECT_DIR
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+          const projectDir = process.env.PROJECT_DIR;
+          const manifestPath = path.join(projectDir, 'twa-manifest.json');
+          const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+          const baseCode = Number(m.appVersionCode || 1);
+          const runNumber = Number(process.env.GITHUB_RUN_NUMBER || 1);
+          const newCode = baseCode + runNumber;
+          if (!Number.isSafeInteger(newCode) || newCode < 1 || newCode > 2100000000) {
+            throw new Error(`appVersionCode inválido para esta execução: ${newCode}`);
+          }
+          const baseName = String(m.appVersionName || m.appVersion || baseCode);
+          m.appVersionCode = newCode;
+          m.appVersionName = `${baseName}-ci.${runNumber}`;
+          m.minSdkVersion = 23;
+          m.signingKey = {
+            ...(m.signingKey || {}),
+            path: './android.keystore',
+            alias: process.env.ANDROID_KEY_ALIAS,
+          };
+          fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2) + '\n');
+          console.log(`Manifesto temporário preparado: versão ${m.appVersionName}, código ${m.appVersionCode}, API mínima ${m.minSdkVersion}.`);
+          NODE
+
+      - name: Gerar projecto Android a partir do manifesto TWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          bubblewrap update --skipVersionUpgrade --manifest="$PROJECT_DIR/twa-manifest.json"
+
+      - name: Diagnosticar critérios PWA/TWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          if bubblewrap validate --url=https://kundjebusiness.netlify.app; then
+            echo "- **Validação PWA:** o validador do Bubblewrap terminou sem erros." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- **Validação PWA:** existem critérios por resolver. O APK será compilado, mas a experiência TWA confiável não está garantida." >> "$GITHUB_STEP_SUMMARY"
+            echo "AVISO: a validação PWA falhou. Consultar o log desta etapa; a compilação será tentada separadamente."
+          fi
+
+      - name: Compilar APK e AAB
+        shell: bash
+        env:
+        run: |
+          set -euo pipefail
+          cd "$PROJECT_DIR"
+          bubblewrap build \
+            --skipPwaValidation \
+            --manifest="$PROJECT_DIR/twa-manifest.json" \
+            --signingKeyPath="$PROJECT_DIR/android.keystore" \
+            --signingKeyAlias="$ANDROID_KEY_ALIAS"
+
+      - name: Validar binário APK e preparar artefacto
+        id: verify_apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="$PROJECT_DIR/app-release-signed.apk"
+
+          if [[ ! -s "$APK" ]]; then
+            echo "ERRO: Bubblewrap não produziu app-release-signed.apk ou o ficheiro está vazio."
+            echo "Ficheiros APK encontrados no projecto:"
+            find "$PROJECT_DIR" -type f -name '*.apk' -printf '%p (%s bytes)\n'
+            exit 1
+          fi
+
+          SIZE="$(stat -c '%s' "$APK")"
+          if (( SIZE < 10000 )); then
+            echo "ERRO: o APK tem apenas $SIZE bytes; tamanho incompatível com um pacote TWA válido."
+            exit 1
+          fi
+
+          unzip -t "$APK" >/dev/null
+          unzip -Z1 "$APK" | grep -Fxq 'AndroidManifest.xml'
+
+          SDK_PATH="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
+          BUILD_TOOLS_DIR="$(find "$SDK_PATH/build-tools" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n 1)"
+          if [[ -z "$BUILD_TOOLS_DIR" || ! -x "$BUILD_TOOLS_DIR/apksigner" || ! -x "$BUILD_TOOLS_DIR/aapt" ]]; then
+            echo "ERRO: não foram encontradas as ferramentas apksigner e aapt do Android SDK."
+            exit 1
+          fi
+
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/apk-signature.txt"
+          "$BUILD_TOOLS_DIR/aapt" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          PACKAGE_ID="$(sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" "$RUNNER_TEMP/apk-badging.txt" | head -n 1)"
+          EXPECTED_PACKAGE_ID="$(node -e "const m=require(process.env.PROJECT_DIR + '/twa-manifest.json'); process.stdout.write(m.packageId)")"
+          if [[ -z "$PACKAGE_ID" || "$PACKAGE_ID" != "$EXPECTED_PACKAGE_ID" ]]; then
+            echo "ERRO: package ID do APK ($PACKAGE_ID) não corresponde ao manifesto ($EXPECTED_PACKAGE_ID)."
+            exit 1
+          fi
+
+          CERT_SHA256="$(sed -nE 's/.*certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' "$RUNNER_TEMP/apk-signature.txt" | head -n 1)"
+          if [[ -z "$CERT_SHA256" ]]; then
+            echo "ERRO: não foi possível obter o fingerprint SHA-256 do certificado de assinatura."
+            exit 1
+          fi
+
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "$APK" "$GITHUB_WORKSPACE/dist/Kundje-Business.apk"
+          echo "APK_SIZE=$SIZE" >> "$GITHUB_ENV"
+          echo "APK_PACKAGE_ID=$PACKAGE_ID" >> "$GITHUB_ENV"
+          CERT_SHA256="$(sed -nE 's/.*certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' "$RUNNER_TEMP/apk-signature.txt" | head -n 1)"
+
+          {
+            echo "## Kundje Business — build Android"
+            echo "- **Resultado:** APK compilado e validado."
+            echo "- **Ficheiro:** Kundje-Business.apk"
+            echo "- **Tamanho:** ${SIZE} bytes"
+            echo "- **Package ID:** ${PACKAGE_ID}"
+            echo "- **Assinatura:** validada pelo apksigner"
+            echo "- **SHA-256 do certificado:** ${CERT_SHA256}"
+            echo "- **Tipo de chave:** ${SIGNING_MODE}"
+            if [[ "$SIGNING_MODE" == "temporary" ]]; then
+              echo "- **Aviso:** foi usada uma chave temporária. Para actualizações consistentes e validação TWA em produção, configura uma keystore persistente nos GitHub Secrets."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "APK validado: $SIZE bytes; package ID: $PACKAGE_ID."
+
+      - name: Verificar Digital Asset Links (diagnóstico)
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://kundjebusiness.netlify.app/.well-known/assetlinks.json"
+          if ! curl --fail --silent --show-error --location --max-time 20 "$URL" -o "$RUNNER_TEMP/assetlinks.json"; then
+            echo "- **Digital Asset Links:** pendente — assetlinks.json não foi encontrado ou não está acessível." >> "$GITHUB_STEP_SUMMARY"
+            echo "AVISO: assetlinks.json não está acessível. O APK pode instalar, mas a TWA pode não abrir em modo confiável." 
+            exit 0
+          fi
+
+          if node - "$RUNNER_TEMP/assetlinks.json" "$APK_PACKAGE_ID" "$APK_CERT_SHA256" <<'NODE'
+          const fs = require('fs');
+          const [file, packageId, sha] = process.argv.slice(2);
+          const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+          const norm = (x) => String(x).replace(/:/g, '').toLowerCase();
+          const wanted = norm(sha);
+          const valid = Array.isArray(data) && data.some((item) =>
+            item.target?.namespace === 'android_app' &&
+            item.target?.package_name === packageId &&
+            Array.isArray(item.target?.sha256_cert_fingerprints) &&
+            item.target.sha256_cert_fingerprints.some((fingerprint) => norm(fingerprint) === wanted) &&
+            Array.isArray(item.relation) && item.relation.includes('delegate_permission/common.handle_all_urls')
+          );
+          if (!valid) process.exit(2);
+          NODE
+          then
+            echo "- **Digital Asset Links:** o package ID e o fingerprint correspondem ao APK." >> "$GITHUB_STEP_SUMMARY"
+            echo "Digital Asset Links corresponde ao APK."
+          else
+            echo "- **Digital Asset Links:** pendente — o package ID e/ou fingerprint do certificado não correspondem ao APK desta execução." >> "$GITHUB_STEP_SUMMARY"
+            echo "AVISO: o fingerprint SHA-256 desta chave não coincide com assetlinks.json."
+          fi
+
+      - name: Publicar APK para transferência
+        uses: actions/upload-artifact@v4
+        with:
+          name: kundje-business-apk
+          path: dist/Kundje-Business.apk
+          if-no-files-found: error
+          retention-days: 14
