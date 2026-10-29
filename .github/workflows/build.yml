@@ -122,7 +122,10 @@ jobs:
 
           echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
 
-          bubblewrap --version
+          SDK_PATH="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+mkdir -p "$HOME/.bubblewrap"
+printf '{"jdkPath":"%s","androidSdkPath":"%s"}\n' "$JAVA_HOME" "$SDK_PATH" > "$HOME/.bubblewrap/config.json"
+bubblewrap --version
 
       - name: Configurar Java e Android SDK no Bubblewrap
         shell: bash
