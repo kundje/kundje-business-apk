@@ -1,72 +1,263 @@
-name: Gerar APK Android Definitivo
+# TAREFA: CORRIGIR DEFINITIVAMENTE O WORKFLOW GITHUB ACTIONS PARA COMPILAR O APK DO KUNDJE BUSINESS
 
-on:
-  push:
-    branches: [ main, master ]
+Actua como um engenheiro sénior especializado em Android, Trusted Web Activity (TWA), Google Bubblewrap CLI, Gradle, Android SDK, Node.js e automação CI/CD com GitHub Actions.
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Aceder ao Código
-        uses: actions/checkout@v4
+Tens de analisar e corrigir directamente o meu repositório GitHub `kundje-business-apk`, de modo a produzir um ficheiro APK Android real, válido, instalável e disponível para transferência nos artefactos do GitHub Actions.
 
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
+**Não quero apenas recomendações, exemplos ou um novo ficheiro YAML sem validação. Quero que inspecciones os ficheiros existentes, identifiques a causa do erro, implementes as correcções necessárias e verifiques o resultado.**
 
-      - name: Configurar Java JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+## 1. Contexto do projecto
 
-      - name: Instalar Bubblewrap e Ferramentas de Build
-        run: |
-          npm install -g @bubblewrap/cli
-          # Garante que o ambiente reconhece o CLI globalmente
-          export PATH="$(npm config get prefix)/bin:$PATH"
+Nome da aplicação: Kundje Business.
 
-      - name: Compilar e Gerar o Binário APK Real
-        run: |
-          echo "A verificar integridade do manifesto TWA..."
-          if [ ! -f "twa-manifest.json" ]; then
-            echo "Erro: twa-manifest.json não encontrado na raiz!"
-            exit 1
-          fi
+Site publicado: https://kundjebusiness.netlify.app
 
-          echo "A executar o descarregamento e build do projeto nativo..."
-          # Força a criação do projeto Android a partir do manifesto sem abrir janelas
-          bubblewrap update --manifest ./twa-manifest.json --non-interactive || true
-          
-          # Tenta construir o APK assinado
-          bubblewrap build --manifest ./twa-manifest.json --skip-signing-validation --non-interactive || true
+Repositório GitHub: `kundje-business-apk`.
 
-          echo "A procurar ficheiros APK gerados em todo o repositório..."
-          find . -name "*.apk" ! -name "*unaligned*" -not -path "*/node_modules/*" -exec cp -v {} ./app-release-signed.apk \;
+Ficheiro de configuração TWA: `twa-manifest.json`, localizado na raiz do repositório.
 
-          # Se por algum motivo o APK ainda não tiver sido gerado, criamos o pacote via script Node direto do TWA
-          if [ ! -f "app-release-signed.apk" ] || [ $(stat -c%s "app-release-signed.apk") -lt 1000 ]; then
-            echo "A gerar pacote alternativo via WebAPK nativo..."
-            npx tsc --version || true
-            # Cria um pacote de binário direto compatível com TWA
-            node -e '
-              const fs = require("fs");
-              if (!fs.existsSync("app-release-signed.apk") || fs.statSync("app-release-signed.apk").size < 1000) {
-                console.log("A criar estrutura de fecho para o TWA...");
-                // Escreve um aviso de redirecionamento ou gera o pacote base
-              }
-            '
-          fi
-          
-          # Se o ficheiro final na raiz tiver menos de 1 KB, vamos forçar o build correto do Gradle localmente
-          if [ -f "app-release-signed.apk" ]; then
-            echo "Tamanho atual do APK: $(stat -c%s "app-release-signed.apk") bytes"
-          fi
+Workflow principal: `.github/workflows/build.yml`.
 
-      - name: Guardar o Ficheiro APK nos Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release-signed
-          path: app-release-signed.apk
+Tecnologias utilizadas:
+- Netlify para alojar a aplicação web.
+- Firebase Firestore para os dados da aplicação.
+- Node.js e `@bubblewrap/cli` para criar o projecto Android.
+- GitHub Actions com runners Linux `ubuntu-latest`.
+- JDK e Android SDK para compilar o projecto através do Gradle.
+
+O objectivo é empacotar o site existente numa aplicação Android através de Trusted Web Activity (TWA), sem substituir nem danificar a aplicação web.
+
+Compatibilidade pretendida: Android 6.0, Android 7.x e Android 8.x, desde que o dispositivo disponha de um navegador compatível com TWA.
+
+## 2. Problema actual
+
+Já tentei corrigir o workflow várias vezes.
+
+Na primeira tentativa, a execução falhou com o código de saída 130, porque o processo dependia de interacção manual na linha de comandos.
+
+Depois, adicionei `actions/setup-java` com Eclipse Temurin JDK 17.
+
+Apesar disso, o workflow passou a terminar com um visto verde, mas o artefacto obtido tinha apenas cerca de 160 bytes, em vez de conter um APK Android verdadeiro.
+
+Não aceito como concluído um workflow que apenas termina sem erros aparentes ou que publica ficheiros vazios, páginas HTML de erro, ficheiros de metadados ou qualquer outro conteúdo que não seja um APK válido.
+
+## 3. Primeira fase: diagnóstico obrigatório
+
+Antes de alterar o projecto, inspecciona:
+
+- O conteúdo actual de `.github/workflows/build.yml`.
+- O ficheiro `twa-manifest.json`.
+- Os ficheiros `package.json` e `package-lock.json`, se existirem.
+- A estrutura Android gerada pelo Bubblewrap.
+- Os ficheiros Gradle e o Gradle Wrapper.
+- Os caminhos de saída do APK e do AAB.
+- A configuração da chave de assinatura.
+- Os logs das execuções anteriores, quando estiverem disponíveis.
+
+Determina exactamente por que razão o artefacto tem 160 bytes.
+
+Investiga especialmente:
+
+1. Se o processo de compilação está realmente a executar.
+2. Se o Android SDK está instalado no runner.
+3. Se as licenças do Android SDK foram aceites.
+4. Se o JDK instalado é compatível com as ferramentas utilizadas.
+5. Se o Bubblewrap está a ser executado no directório correcto.
+6. Se o workflow está a publicar o ficheiro correcto.
+7. Se os caminhos dos artefactos correspondem aos ficheiros produzidos pelo Gradle ou pelo Bubblewrap.
+8. Se existem prompts interactivos, erros de assinatura ou falhas de dependências ocultados nos logs.
+
+Não presumir que `--non-interactive` é uma opção válida. Verificar primeiro os comandos e as opções suportados pela versão instalada do Bubblewrap.
+
+## 4. Segunda fase: corrigir o ambiente de compilação
+
+Actualiza o ficheiro `.github/workflows/build.yml` mantendo as funcionalidades úteis do workflow existente.
+
+O ambiente deve configurar explicitamente:
+
+- Checkout do repositório.
+- Node.js numa versão suportada pela versão seleccionada do Bubblewrap.
+- Eclipse Temurin JDK 17, quando compatível com as versões efectivamente utilizadas.
+- Android SDK Command-line Tools.
+- Android SDK Platform Tools.
+- As plataformas e versões de Build Tools exigidas pelo projecto.
+- As licenças necessárias do Android SDK.
+- As dependências Node.js, quando necessárias.
+- A execução do Gradle com as permissões e configurações correctas.
+
+Utiliza versões estáveis e compatíveis das GitHub Actions, verificando a documentação oficial actual antes de escolher versões.
+
+Podes utilizar uma acção própria para instalar o Android SDK, como `android-actions/setup-android`, desde que a respectiva versão seja compatível com o runner.
+
+Não instales pacotes Android obsoletos sem necessidade. Não descarregues nem instales o Android Studio completo se as ferramentas de linha de comandos forem suficientes.
+
+Não alteres versões de Java, Gradle, Android Gradle Plugin ou SDK arbitrariamente. Primeiro identifica as versões compatíveis com os ficheiros existentes.
+
+## 5. Terceira fase: corrigir a compilação TWA
+
+Verifica se o site https://kundjebusiness.netlify.app continua acessível e se a configuração TWA aponta para o domínio correcto.
+
+Confirma o manifesto web e os restantes requisitos necessários para uma TWA funcional.
+
+Depois, executa o processo correcto de geração e compilação Android.
+
+Segue esta prioridade:
+
+1. Reutilizar o projecto Android existente, se estiver íntegro.
+2. Actualizar os ficheiros gerados pelo Bubblewrap quando necessário, sem perder configurações importantes.
+3. Executar o Bubblewrap utilizando comandos e opções oficialmente suportados.
+4. Compilar com o Gradle quando essa abordagem for mais adequada à estrutura existente.
+5. Produzir um APK de lançamento assinado quando existir uma chave de assinatura devidamente configurada.
+6. Produzir, em alternativa, um APK de depuração instalável para testes quando ainda não existir a configuração da assinatura de lançamento.
+
+Não recries o projecto inteiro sem necessidade. Não substituas o `twa-manifest.json` por um manifesto inventado.
+
+A configuração deve ter um `minSdkVersion` compatível com o Android 6.0, API 23, sem quebrar as restantes definições necessárias. Verifica igualmente a compatibilidade do navegador disponível nos dispositivos pretendidos.
+
+## 6. Quarta fase: assinatura e segurança
+
+Verifica a configuração de assinatura definida no projecto.
+
+Se existir uma chave de lançamento, utiliza-a de forma segura através dos GitHub Actions Secrets.
+
+Quando aplicável, utiliza variáveis de ambiente como:
+
+- `BUBBLEWRAP_KEYSTORE_PASSWORD`
+- `BUBBLEWRAP_KEY_PASSWORD`
+
+Ajusta os nomes e as variáveis à configuração real do projecto.
+
+Se for necessário disponibilizar um ficheiro de chave no runner, recupera-o a partir de um segredo protegido e elimina-o do ambiente temporário depois da compilação.
+
+Nunca publiques a chave privada, palavras-passe, tokens ou credenciais do Firebase nos logs ou no repositório.
+
+Não cries uma chave de lançamento diferente em cada execução. Uma nova chave pode impedir que futuras versões actualizem correctamente a aplicação instalada.
+
+Se faltar uma credencial necessária para a assinatura de lançamento, explica exactamente qual é a configuração em falta e disponibiliza um APK de depuração assinado para testes, se o projecto permitir.
+
+Não rotules um APK não assinado como instalável.
+
+## 7. Quinta fase: validar o APK antes de publicar o artefacto
+
+Esta fase é obrigatória.
+
+Depois da compilação, localiza os ficheiros APK efectivamente produzidos. Não assumas que o ficheiro está numa pasta específica sem verificar.
+
+Utiliza ferramentas adequadas para confirmar que o ficheiro é realmente um APK Android, incluindo:
+
+- Verificação de que existe e não está vazio.
+- Verificação de que tem um tamanho plausível e não os 160 bytes anteriores.
+- Teste da integridade do arquivo ZIP.
+- Verificação da presença dos conteúdos Android esperados, incluindo o manifesto compilado.
+- Verificação da assinatura, quando o APK estiver assinado.
+- Verificação do identificador da aplicação e da configuração de compatibilidade, quando as ferramentas disponíveis o permitirem.
+
+Um ficheiro com extensão `.apk` não deve ser considerado válido apenas por causa do seu nome.
+
+Se não existir um APK válido, o workflow deve terminar com erro e indicar a causa. Não deve carregar um artefacto falso ou vazio para produzir um visto verde.
+
+Se a compilação produzir também um AAB válido, podes publicá-lo como artefacto separado.
+
+## 8. Sexta fase: publicar os ficheiros correctos
+
+Configura o workflow para publicar o APK verdadeiro nos artefactos da execução do GitHub Actions.
+
+O resultado deve incluir, conforme o tipo de compilação:
+
+- `kundje-business.apk`: APK assinado de lançamento ou APK de depuração claramente identificado.
+- `app-release-bundle.aab`: opcional, apenas quando tiver sido efectivamente produzido.
+- Logs ou relatórios de diagnóstico úteis, se necessário.
+
+Utiliza os caminhos reais obtidos durante a compilação. Não cries ficheiros com nomes de APK sem conteúdo Android válido.
+
+A publicação do artefacto deve acontecer somente depois de as verificações obrigatórias passarem.
+
+Mantém um resumo da compilação no GitHub Actions que mostre:
+- Resultado da compilação.
+- Tipo de APK produzido.
+- Tamanho do ficheiro.
+- Identificador da aplicação.
+- Estado da validação da assinatura.
+- Caminho do artefacto publicado.
+
+Se faltar uma chave de lançamento, distingue claramente um APK de depuração de uma versão assinada de lançamento.
+
+## 9. Sétima fase: requisitos de Trusted Web Activity
+
+A aplicação deve continuar a abrir o domínio:
+
+https://kundjebusiness.netlify.app
+
+Verifica a configuração Digital Asset Links em:
+
+https://kundjebusiness.netlify.app/.well-known/assetlinks.json
+
+Confirma se o ficheiro existe, se contém JSON válido e se o identificador Android e a impressão digital SHA-256 correspondem à assinatura utilizada.
+
+Não inventes uma impressão digital. Se for necessário actualizar este ficheiro, indica os dados reais que faltam e prepara a configuração de forma segura.
+
+Não declares que a TWA está totalmente verificada se os Digital Asset Links não tiverem sido confirmados.
+
+Atenção: uma TWA continua a apresentar o conteúdo web alojado no Netlify. A criação do APK, por si só, não transforma a aplicação web numa aplicação completamente offline ou independente do serviço alojado.
+
+Não modifiques a aplicação web, as regras do Firebase Firestore ou as definições do Netlify sem que isso seja estritamente necessário para corrigir um requisito da TWA.
+
+## 10. Oitava fase: execução não interactiva e diagnóstico
+
+O workflow tem de funcionar sem depender de confirmações manuais.
+
+Resolve os pedidos de entrada interactivos através das opções oficialmente suportadas, das variáveis de ambiente ou da configuração prévia dos ficheiros necessários.
+
+Se uma etapa falhar, apresenta a mensagem original relevante e identifica a etapa exacta que falhou.
+
+Não ignores os códigos de saída das ferramentas. Não uses comandos que escondam erros para forçar uma execução verde.
+
+Conserva logs úteis para diagnóstico, sem expor segredos.
+
+Se o Bubblewrap falhar, verifica se o projecto Android gerado pode ser compilado directamente pelo Gradle. Não utilizes essa alternativa para contornar falhas sem diagnosticar a causa.
+
+## 11. Testes finais obrigatórios
+
+Executa os testes que forem possíveis no ambiente disponível:
+
+1. Verificar a configuração e a sintaxe do workflow.
+2. Confirmar a instalação do Node.js, JDK e Android SDK.
+3. Confirmar a instalação das dependências e a aceitação das licenças necessárias.
+4. Executar a validação do projecto TWA.
+5. Executar a compilação Android.
+6. Validar o APK resultante.
+7. Confirmar que o ficheiro publicado é o mesmo APK validado.
+8. Verificar se o workflow falha correctamente quando a compilação não produz um APK válido.
+9. Verificar o artefacto gerado e a sua disponibilidade para transferência.
+
+Não afirmes que a aplicação foi testada num dispositivo Android se não tiveres executado esse teste.
+
+## 12. Critérios de aceitação
+
+O trabalho só deve ser considerado concluído quando:
+
+- O workflow estiver actualizado no repositório.
+- A compilação produzir um APK Android real.
+- O APK passar as verificações de integridade.
+- A assinatura estiver validada ou o ficheiro estiver claramente identificado como APK de depuração assinado.
+- O artefacto correcto estiver disponível para transferência.
+- O workflow deixar de considerar bem-sucedidos os builds que produzem apenas ficheiros vazios ou inválidos.
+- As configurações e os segredos sensíveis não forem expostos.
+- Os requisitos TWA que dependem do Netlify estiverem verificados ou claramente identificados como pendentes.
+
+## 13. Resultado que deves apresentar
+
+No final, apresenta um relatório objectivo contendo:
+
+1. Causa identificada do artefacto de 160 bytes.
+2. Ficheiros efectivamente alterados.
+3. Principais correcções implementadas.
+4. Testes realmente executados e resultados.
+5. Localização e tamanho do APK gerado.
+6. Link ou localização do artefacto para transferência.
+7. Estado da assinatura e compatibilidade Android.
+8. Configurações externas ainda necessárias.
+
+Se não conseguires concluir a compilação, não declares o projecto concluído. Apresenta o erro real, o log relevante e a alteração concreta ainda necessária.
+
+**Executa agora estas tarefas directamente no repositório existente. Não te limites a devolver instruções ou um exemplo genérico de workflow.**
