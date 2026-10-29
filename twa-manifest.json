@@ -7,7 +7,7 @@
   "themeColor": "#087c48",
   "backgroundColor": "#ffffff",
   "iconUrl": "https://kundjebusiness.netlify.app/icon.png",
-  "appId": "com.kundje.business.app",
+  "packageId": "com.kundje.business.app",
   "launcherName": "Kundje Business",
   "signingKey": {
     "path": "android.keystore",
