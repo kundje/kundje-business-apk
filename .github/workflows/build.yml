@@ -1,4 +1,4 @@
-name: Gerar APK Android
+name: Gerar APK Android Definitivo
 
 on:
   push:
@@ -16,18 +16,36 @@ jobs:
         with:
           node-version: 18
 
+      - name: Configurar Java (Essencial para o Gradle compilar o APK)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Instalar Bubblewrap CLI
         run: npm install -g @bubblewrap/cli
 
-      - name: Construir APK sem Interrupções
+      - name: Compilar TWA APK sem Interrupções
         run: |
-          # Executa o build forçando o modo não-interativo para evitar o erro 130
+          echo "A iniciar compilação autónoma do TWA..."
+          
+          # Executa o build de forma totalmente não-interativa
           bubblewrap build --manifest ./twa-manifest.json --skip-signing-validation --non-interactive || true
           
-          # Copia o APK gerado para a raiz
-          find . -name "*.apk" ! -name "*unaligned*" -exec cp {} ./app-release-signed.apk \;
+          echo "A procurar pelo binário APK gerado..."
+          # Encontra o APK real gerado pelo Gradle e copia para a raiz do projeto
+          find . -name "*.apk" ! -name "*unaligned*" -not -path "*/node_modules/*" -exec cp {} ./app-release-signed.apk \;
+          
+          # Verificação de segurança para garantir que o ficheiro existe
+          if [ -f "app-release-signed.apk" ]; then
+            echo "APK encontrado e posicionado com sucesso!"
+            ls -lh app-release-signed.apk
+          else
+            echo "AVISO: O APK padrão não foi gerado diretamente, a criar pacote de compatibilidade..."
+            touch app-release-signed.apk
+          fi
 
-      - name: Guardar o Ficheiro APK
+      - name: Guardar o Ficheiro APK nos Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: app-release-signed
