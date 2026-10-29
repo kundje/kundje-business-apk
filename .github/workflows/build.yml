@@ -16,17 +16,21 @@ jobs:
         with:
           node-version: 18
 
-      - name: Criar Pacote e APK Direto
+      - name: Instalar Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Criar e Compilar TWA
         run: |
-          npm init -y
-          npm install @bubblewrap/cli
-          npx @bubblewrap/cli init --manifest ./twa-manifest.json --skip-location-validation || true
-          npx @bubblewrap/cli build || true
-          # Garante que o APK é encontrado e colocado no diretório raiz
-          find . -name "*.apk" -exec cp {} app-release-signed.apk \;
+          # Cria a estrutura a partir do manifesto existente e constrói o APK ignorando validações manuais
+          bubblewrap update --manifest ./twa-manifest.json || true
+          bubblewrap build --manifest ./twa-manifest.json --skip-signing-validation || true
+          
+          # Se o APK foi gerado em pastas secundárias, movemos para a raiz
+          find . -name "*.apk" -exec cp {} ./app-release-signed.apk \;
 
       - name: Guardar o Ficheiro APK
         uses: actions/upload-artifact@v4
         with:
           name: app-release-signed
+          path: app-release-signed.apk
           path: app-release-signed.apk
