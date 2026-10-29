@@ -35,79 +35,117 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Instalar Android SDK e licenças
+      - name: Instalar Android SDK
         uses: android-actions/setup-android@v4
         with:
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
-          packages: 'platform-tools platforms;android-35 platforms;android-36 build-tools;35.0.0 build-tools;36.0.0'
+          packages: platform-tools
 
-      - name: Verificar manifesto e disponibilidade do site
+      - name: Instalar plataformas e ferramentas Android
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Verificar manifesto e site
         shell: bash
         run: |
           set -euo pipefail
 
           if [[ ! -f "twa-manifest.json" ]]; then
-            echo "ERRO: twa-manifest.json não existe na raiz do repositório."
+            echo "ERRO: twa-manifest.json não encontrado."
             exit 1
           fi
 
           node <<'NODE'
           const fs = require('fs');
-          const m = JSON.parse(fs.readFileSync('twa-manifest.json', 'utf8'));
-          const required = ['host', 'name', 'packageId', 'startUrl', 'iconUrl'];
-          const missing = required.filter((key) => !m[key]);
+          const m = JSON.parse(
+            fs.readFileSync('twa-manifest.json', 'utf8')
+          );
+
+          const required = [
+            'host',
+            'name',
+            'packageId',
+            'startUrl',
+            'iconUrl'
+          ];
+
+          const missing = required.filter(
+            key => !m[key]
+          );
+
           if (missing.length) {
-            console.error(`Campos obrigatórios ausentes em twa-manifest.json: ${missing.join(', ')}`);
+            console.error(
+              'Campos em falta: ' + missing.join(', ')
+            );
             process.exit(1);
           }
-          const host = String(m.host).replace(/^https?:\/\//i, '').replace(/\/$/, '').split('/')[0];
+
+          const host = String(m.host)
+            .replace(/^https?:\/\//i, '')
+            .replace(/\/$/, '')
+            .split('/')[0];
+
           if (host !== 'kundjebusiness.netlify.app') {
-            console.error(`O host do manifesto é "${host}", mas o site esperado é "kundjebusiness.netlify.app".`);
+            console.error('Host incorrecto: ' + host);
             process.exit(1);
           }
+
           if (!/^https:\/\//i.test(m.iconUrl)) {
-            console.error('iconUrl tem de ser um URL HTTPS completo.');
+            console.error('iconUrl deve utilizar HTTPS.');
             process.exit(1);
           }
-          if (m.minSdkVersion != null && Number(m.minSdkVersion) > 23) {
-            console.error(`minSdkVersion=${m.minSdkVersion} impede a instalação em Android 6.0 (API 23).`);
-            process.exit(1);
-          }
-          console.log(`Aplicação: ${m.name}`);
-          console.log(`Package ID: ${m.packageId}`);
-          console.log(`Host: ${host}`);
-          console.log(`minSdkVersion actual: ${m.minSdkVersion ?? 'não definido; será configurado para 23 no build'}`);
+
+          console.log('Aplicação: ' + m.name);
+          console.log('Package ID: ' + m.packageId);
+          console.log('Host: ' + host);
           NODE
 
-          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
-            https://kundjebusiness.netlify.app/ -o /dev/null
+          curl --fail --silent --show-error \
+            --location --retry 3 \
+            https://kundjebusiness.netlify.app/ \
+            -o /dev/null
+
           echo "Site Netlify acessível."
 
       - name: Instalar Bubblewrap CLI
         shell: bash
         run: |
           set -euo pipefail
+
           npm install --global @bubblewrap/cli@1.27.0
+
+          echo "$(npm config get prefix)/bin" >> "$GITHUB_PATH"
+
           bubblewrap --version
 
-      - name: Configurar caminhos do JDK e Android SDK
+      - name: Configurar Java e Android SDK no Bubblewrap
         shell: bash
         run: |
           set -euo pipefail
+
           SDK_PATH="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+
           if [[ -z "$SDK_PATH" || ! -d "$SDK_PATH" ]]; then
             echo "ERRO: Android SDK não encontrado."
-            echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-não definido}"
-            echo "ANDROID_HOME=${ANDROID_HOME:-não definido}"
             exit 1
           fi
-          bubblewrap updateConfig --jdkPath="$JAVA_HOME" --androidSdkPath="$SDK_PATH"
+
+          bubblewrap updateConfig \
+            --jdkPath="$JAVA_HOME" \
+            --androidSdkPath="$SDK_PATH"
+
           bubblewrap doctor
+
           echo "ANDROID_SDK_ROOT=$SDK_PATH" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=$SDK_PATH" >> "$GITHUB_ENV"
 
-      - name: Preparar manifesto CI e chave de assinatura
+      - name: Preparar projecto e assinatura
         shell: bash
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -118,206 +156,356 @@ jobs:
           set -euo pipefail
 
           PROJECT_DIR="$RUNNER_TEMP/kundje-business-twa"
+
           rm -rf "$PROJECT_DIR"
           mkdir -p "$PROJECT_DIR"
+
           cp twa-manifest.json "$PROJECT_DIR/twa-manifest.json"
 
-          MANIFEST_ALIAS="$(node -e "const m=require('./twa-manifest.json'); process.stdout.write((m.signingKey && m.signingKey.alias) || 'android')")"
+          MANIFEST_ALIAS="$(node -e "
+            const m = require('./twa-manifest.json');
+            process.stdout.write(
+              (m.signingKey && m.signingKey.alias) || 'android'
+            );
+          ")"
+
           KEY_ALIAS="${ANDROID_KEY_ALIAS:-$MANIFEST_ALIAS}"
 
-          if [[ -n "$ANDROID_KEYSTORE_BASE64" || -n "$BUBBLEWRAP_KEYSTORE_PASSWORD" || -n "$BUBBLEWRAP_KEY_PASSWORD" ]]; then
-            if [[ -z "$ANDROID_KEYSTORE_BASE64" || -z "$BUBBLEWRAP_KEYSTORE_PASSWORD" || -z "$BUBBLEWRAP_KEY_PASSWORD" ]]; then
-              echo "ERRO: para uma chave persistente, configura os três secrets: ANDROID_KEYSTORE_BASE64, BUBBLEWRAP_KEYSTORE_PASSWORD e BUBBLEWRAP_KEY_PASSWORD."
+          if [[ -n "$ANDROID_KEYSTORE_BASE64" || \
+                -n "$BUBBLEWRAP_KEYSTORE_PASSWORD" || \
+                -n "$BUBBLEWRAP_KEY_PASSWORD" ]]; then
+
+            if [[ -z "$ANDROID_KEYSTORE_BASE64" || \
+                  -z "$BUBBLEWRAP_KEYSTORE_PASSWORD" || \
+                  -z "$BUBBLEWRAP_KEY_PASSWORD" ]]; then
+              echo "ERRO: configura os três secrets da assinatura."
               exit 1
             fi
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$PROJECT_DIR/android.keystore"
+
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" \
+              | base64 --decode > "$PROJECT_DIR/android.keystore"
+
             STORE_PASS="$BUBBLEWRAP_KEYSTORE_PASSWORD"
             KEY_PASS="$BUBBLEWRAP_KEY_PASSWORD"
-            keytool -list -keystore "$PROJECT_DIR/android.keystore" -storepass "$STORE_PASS" -alias "$KEY_ALIAS" >/dev/null
+
+            keytool -list \
+              -keystore "$PROJECT_DIR/android.keystore" \
+              -storepass "$STORE_PASS" \
+              -alias "$KEY_ALIAS" >/dev/null
+
             SIGNING_MODE="persistent"
-            echo "Será usada a chave persistente configurada nos GitHub Secrets."
+
           else
-            echo "AVISO: não foi configurada uma chave persistente. Será criada uma chave temporária para testes; futuras compilações não poderão actualizar esta instalação e o fingerprint terá de ser configurado no assetlinks.json."
+            echo "AVISO: será criada uma chave temporária para testes."
+
             STORE_PASS="$(openssl rand -hex 24)"
             KEY_PASS="$(openssl rand -hex 24)"
+
             umask 077
+
             keytool -genkeypair -noprompt -v \
               -keystore "$PROJECT_DIR/android.keystore" \
               -alias "$KEY_ALIAS" \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass "$STORE_PASS" -keypass "$KEY_PASS" \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -storepass "$STORE_PASS" \
+              -keypass "$KEY_PASS" \
               -dname "CN=Kundje Business, OU=Mobile, O=Kundje, L=Lichinga, ST=Niassa, C=MZ"
+
             SIGNING_MODE="temporary"
           fi
 
           echo "::add-mask::$STORE_PASS"
           echo "::add-mask::$KEY_PASS"
+
           {
-            printf 'PROJECT_DIR=%s\n' "$PROJECT_DIR"
-            printf 'ANDROID_KEY_ALIAS=%s\n' "$KEY_ALIAS"
-            printf 'BUBBLEWRAP_KEYSTORE_PASSWORD=%s\n' "$STORE_PASS"
-            printf 'BUBBLEWRAP_KEY_PASSWORD=%s\n' "$KEY_PASS"
-            printf 'SIGNING_MODE=%s\n' "$SIGNING_MODE"
+            echo "PROJECT_DIR=$PROJECT_DIR"
+            echo "ANDROID_KEY_ALIAS=$KEY_ALIAS"
+            echo "BUBBLEWRAP_KEYSTORE_PASSWORD=$STORE_PASS"
+            echo "BUBBLEWRAP_KEY_PASSWORD=$KEY_PASS"
+            echo "SIGNING_MODE=$SIGNING_MODE"
           } >> "$GITHUB_ENV"
 
-          export ANDROID_KEY_ALIAS="$KEY_ALIAS"
           export PROJECT_DIR
+          export ANDROID_KEY_ALIAS="$KEY_ALIAS"
+
           node <<'NODE'
           const fs = require('fs');
           const path = require('path');
+
           const projectDir = process.env.PROJECT_DIR;
-          const manifestPath = path.join(projectDir, 'twa-manifest.json');
-          const m = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+          const manifestPath = path.join(
+            projectDir,
+            'twa-manifest.json'
+          );
+
+          const m = JSON.parse(
+            fs.readFileSync(manifestPath, 'utf8')
+          );
+
           const baseCode = Number(m.appVersionCode || 1);
-          const runNumber = Number(process.env.GITHUB_RUN_NUMBER || 1);
+          const runNumber = Number(
+            process.env.GITHUB_RUN_NUMBER || 1
+          );
+
           const newCode = baseCode + runNumber;
-          if (!Number.isSafeInteger(newCode) || newCode < 1 || newCode > 2100000000) {
-            throw new Error(`appVersionCode inválido para esta execução: ${newCode}`);
+
+          if (
+            !Number.isSafeInteger(newCode) ||
+            newCode < 1 ||
+            newCode > 2100000000
+          ) {
+            throw new Error('Código de versão inválido.');
           }
-          const baseName = String(m.appVersionName || m.appVersion || baseCode);
+
+          const baseVersion = String(
+            m.appVersion || '1.0'
+          );
+
+          m.appVersion = `${baseVersion}-ci.${runNumber}`;
           m.appVersionCode = newCode;
-          m.appVersionName = `${baseName}-ci.${runNumber}`;
           m.minSdkVersion = 23;
+
           m.signingKey = {
             ...(m.signingKey || {}),
-            path: './android.keystore',
-            alias: process.env.ANDROID_KEY_ALIAS,
+            path: path.join(projectDir, 'android.keystore'),
+            alias: process.env.ANDROID_KEY_ALIAS
           };
-          fs.writeFileSync(manifestPath, JSON.stringify(m, null, 2) + '\n');
-          console.log(`Manifesto temporário preparado: versão ${m.appVersionName}, código ${m.appVersionCode}, API mínima ${m.minSdkVersion}.`);
+
+          fs.writeFileSync(
+            manifestPath,
+            JSON.stringify(m, null, 2) + '\n'
+          );
+
+          console.log('Manifesto temporário preparado.');
+          console.log('Versão: ' + m.appVersion);
+          console.log('Código: ' + m.appVersionCode);
+          console.log('API mínima: ' + m.minSdkVersion);
           NODE
 
-      - name: Gerar projecto Android a partir do manifesto TWA
+      - name: Gerar projecto Android TWA
         shell: bash
         run: |
           set -euo pipefail
-          cd "$PROJECT_DIR"
-          bubblewrap update --skipVersionUpgrade --manifest="$PROJECT_DIR/twa-manifest.json"
 
-      - name: Diagnosticar critérios PWA/TWA
+          cd "$PROJECT_DIR"
+
+          bubblewrap update \
+            --skipVersionUpgrade \
+            --manifest="$PROJECT_DIR/twa-manifest.json"
+
+      - name: Validar critérios PWA
         shell: bash
         run: |
           set -euo pipefail
+
           cd "$PROJECT_DIR"
-          if bubblewrap validate --url=https://kundjebusiness.netlify.app; then
-            echo "- **Validação PWA:** o validador do Bubblewrap terminou sem erros." >> "$GITHUB_STEP_SUMMARY"
+
+          if bubblewrap validate \
+            --url=https://kundjebusiness.netlify.app; then
+
+            echo "Validação PWA concluída."
+            echo "- Validação PWA: concluída." \
+              >> "$GITHUB_STEP_SUMMARY"
+
           else
-            echo "- **Validação PWA:** existem critérios por resolver. O APK será compilado, mas a experiência TWA confiável não está garantida." >> "$GITHUB_STEP_SUMMARY"
-            echo "AVISO: a validação PWA falhou. Consultar o log desta etapa; a compilação será tentada separadamente."
+
+            echo "AVISO: a validação PWA falhou."
+            echo "A compilação será tentada separadamente."
+
+            echo "- Validação PWA: existem critérios por resolver." \
+              >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Compilar APK e AAB
+      - name: Compilar APK Android
         shell: bash
-        env:
         run: |
           set -euo pipefail
+
           cd "$PROJECT_DIR"
+
           bubblewrap build \
             --skipPwaValidation \
             --manifest="$PROJECT_DIR/twa-manifest.json" \
             --signingKeyPath="$PROJECT_DIR/android.keystore" \
             --signingKeyAlias="$ANDROID_KEY_ALIAS"
 
-      - name: Validar binário APK e preparar artefacto
-        id: verify_apk
+      - name: Validar o APK gerado
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$PROJECT_DIR/app-release-signed.apk"
 
           if [[ ! -s "$APK" ]]; then
-            echo "ERRO: Bubblewrap não produziu app-release-signed.apk ou o ficheiro está vazio."
-            echo "Ficheiros APK encontrados no projecto:"
-            find "$PROJECT_DIR" -type f -name '*.apk' -printf '%p (%s bytes)\n'
+            echo "ERRO: o APK não foi criado ou está vazio."
+
+            find "$PROJECT_DIR" \
+              -type f -name '*.apk' \
+              -printf '%p (%s bytes)\n'
+
             exit 1
           fi
 
           SIZE="$(stat -c '%s' "$APK")"
+
           if (( SIZE < 10000 )); then
-            echo "ERRO: o APK tem apenas $SIZE bytes; tamanho incompatível com um pacote TWA válido."
+            echo "ERRO: APK demasiado pequeno: $SIZE bytes."
             exit 1
           fi
 
           unzip -t "$APK" >/dev/null
-          unzip -Z1 "$APK" | grep -Fxq 'AndroidManifest.xml'
 
-          SDK_PATH="${ANDROID_SDK_ROOT:-${ANDROID_HOME}}"
-          BUILD_TOOLS_DIR="$(find "$SDK_PATH/build-tools" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n 1)"
-          if [[ -z "$BUILD_TOOLS_DIR" || ! -x "$BUILD_TOOLS_DIR/apksigner" || ! -x "$BUILD_TOOLS_DIR/aapt" ]]; then
-            echo "ERRO: não foram encontradas as ferramentas apksigner e aapt do Android SDK."
+          unzip -Z1 "$APK" \
+            | grep -Fxq 'AndroidManifest.xml'
+
+          SDK_PATH="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          BUILD_TOOLS="$SDK_PATH/build-tools/35.0.0"
+
+          if [[ ! -x "$BUILD_TOOLS/apksigner" || \
+                ! -x "$BUILD_TOOLS/aapt" ]]; then
+            echo "ERRO: faltam ferramentas de validação Android."
             exit 1
           fi
 
-          "$BUILD_TOOLS_DIR/apksigner" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/apk-signature.txt"
-          "$BUILD_TOOLS_DIR/aapt" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
-          PACKAGE_ID="$(sed -n "s/^package: name='\\([^']*\\)'.*/\\1/p" "$RUNNER_TEMP/apk-badging.txt" | head -n 1)"
-          EXPECTED_PACKAGE_ID="$(node -e "const m=require(process.env.PROJECT_DIR + '/twa-manifest.json'); process.stdout.write(m.packageId)")"
-          if [[ -z "$PACKAGE_ID" || "$PACKAGE_ID" != "$EXPECTED_PACKAGE_ID" ]]; then
-            echo "ERRO: package ID do APK ($PACKAGE_ID) não corresponde ao manifesto ($EXPECTED_PACKAGE_ID)."
+          "$BUILD_TOOLS/apksigner" verify \
+            --verbose \
+            --print-certs \
+            "$APK" | tee "$RUNNER_TEMP/apk-signature.txt"
+
+          "$BUILD_TOOLS/aapt" dump badging "$APK" \
+            > "$RUNNER_TEMP/apk-badging.txt"
+
+          PACKAGE_ID="$(
+            sed -n "s/^package: name='\([^']*\)'.*/\1/p" \
+              "$RUNNER_TEMP/apk-badging.txt" | head -n 1
+          )"
+
+          EXPECTED_PACKAGE_ID="$(
+            node -e "
+              const m = require(
+                process.env.PROJECT_DIR + '/twa-manifest.json'
+              );
+              process.stdout.write(m.packageId);
+            "
+          )"
+
+          if [[ -z "$PACKAGE_ID" || \
+                "$PACKAGE_ID" != "$EXPECTED_PACKAGE_ID" ]]; then
+            echo "ERRO: package ID não corresponde ao manifesto."
+            echo "Esperado: $EXPECTED_PACKAGE_ID"
+            echo "Obtido: $PACKAGE_ID"
             exit 1
           fi
 
-          CERT_SHA256="$(sed -nE 's/.*certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' "$RUNNER_TEMP/apk-signature.txt" | head -n 1)"
+          MIN_SDK="$(
+            sed -n "s/^sdkVersion:'\([^']*\)'.*/\1/p" \
+              "$RUNNER_TEMP/apk-badging.txt" | head -n 1
+          )"
+
+          if [[ -z "$MIN_SDK" ]] || (( MIN_SDK > 23 )); then
+            echo "ERRO: o APK não confirma compatibilidade com API 23."
+            echo "API mínima detectada: ${MIN_SDK:-desconhecida}"
+            exit 1
+          fi
+
+          CERT_SHA256="$(
+            sed -nE \
+              's/.*certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' \
+              "$RUNNER_TEMP/apk-signature.txt" | head -n 1
+          )"
+
           if [[ -z "$CERT_SHA256" ]]; then
-            echo "ERRO: não foi possível obter o fingerprint SHA-256 do certificado de assinatura."
+            echo "ERRO: fingerprint SHA-256 não encontrado."
             exit 1
           fi
 
           mkdir -p "$GITHUB_WORKSPACE/dist"
+
           cp "$APK" "$GITHUB_WORKSPACE/dist/Kundje-Business.apk"
-          echo "APK_SIZE=$SIZE" >> "$GITHUB_ENV"
-          echo "APK_PACKAGE_ID=$PACKAGE_ID" >> "$GITHUB_ENV"
-          CERT_SHA256="$(sed -nE 's/.*certificate SHA-256 digest: ([0-9a-fA-F:]+).*/\1/p' "$RUNNER_TEMP/apk-signature.txt" | head -n 1)"
 
           {
-            echo "## Kundje Business — build Android"
-            echo "- **Resultado:** APK compilado e validado."
-            echo "- **Ficheiro:** Kundje-Business.apk"
-            echo "- **Tamanho:** ${SIZE} bytes"
-            echo "- **Package ID:** ${PACKAGE_ID}"
-            echo "- **Assinatura:** validada pelo apksigner"
-            echo "- **SHA-256 do certificado:** ${CERT_SHA256}"
-            echo "- **Tipo de chave:** ${SIGNING_MODE}"
+            echo "APK_SIZE=$SIZE"
+            echo "APK_PACKAGE_ID=$PACKAGE_ID"
+            echo "APK_CERT_SHA256=$CERT_SHA256"
+          } >> "$GITHUB_ENV"
+
+          {
+            echo "## Kundje Business - Build Android"
+            echo "- Resultado: APK compilado e validado."
+            echo "- Ficheiro: Kundje-Business.apk"
+            echo "- Tamanho: $SIZE bytes"
+            echo "- Package ID: $PACKAGE_ID"
+            echo "- API mínima: $MIN_SDK"
+            echo "- Assinatura: validada pelo apksigner"
+            echo "- SHA-256 do certificado: $CERT_SHA256"
+            echo "- Tipo de chave: $SIGNING_MODE"
+
             if [[ "$SIGNING_MODE" == "temporary" ]]; then
-              echo "- **Aviso:** foi usada uma chave temporária. Para actualizações consistentes e validação TWA em produção, configura uma keystore persistente nos GitHub Secrets."
+              echo "- AVISO: chave temporária. Não utilizar para actualizações de produção."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-          echo "APK validado: $SIZE bytes; package ID: $PACKAGE_ID."
+          echo "APK validado com sucesso."
 
-      - name: Verificar Digital Asset Links (diagnóstico)
-        if: success()
+      - name: Diagnosticar Digital Asset Links
         shell: bash
         run: |
           set -euo pipefail
+
           URL="https://kundjebusiness.netlify.app/.well-known/assetlinks.json"
-          if ! curl --fail --silent --show-error --location --max-time 20 "$URL" -o "$RUNNER_TEMP/assetlinks.json"; then
-            echo "- **Digital Asset Links:** pendente — assetlinks.json não foi encontrado ou não está acessível." >> "$GITHUB_STEP_SUMMARY"
-            echo "AVISO: assetlinks.json não está acessível. O APK pode instalar, mas a TWA pode não abrir em modo confiável." 
+          FILE="$RUNNER_TEMP/assetlinks.json"
+
+          if ! curl --fail --silent --show-error \
+            --location --max-time 20 "$URL" -o "$FILE"; then
+
+            echo "AVISO: assetlinks.json não está acessível."
+
+            echo "- Digital Asset Links: pendente." \
+              >> "$GITHUB_STEP_SUMMARY"
+
             exit 0
           fi
 
-          if node - "$RUNNER_TEMP/assetlinks.json" "$APK_PACKAGE_ID" "$APK_CERT_SHA256" <<'NODE'
+          if node - "$FILE" "$APK_PACKAGE_ID" "$APK_CERT_SHA256" <<'NODE'
           const fs = require('fs');
+
           const [file, packageId, sha] = process.argv.slice(2);
           const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-          const norm = (x) => String(x).replace(/:/g, '').toLowerCase();
+
+          const norm = value =>
+            String(value).replace(/:/g, '').toLowerCase();
+
           const wanted = norm(sha);
-          const valid = Array.isArray(data) && data.some((item) =>
+
+          const valid = Array.isArray(data) && data.some(item =>
             item.target?.namespace === 'android_app' &&
             item.target?.package_name === packageId &&
             Array.isArray(item.target?.sha256_cert_fingerprints) &&
-            item.target.sha256_cert_fingerprints.some((fingerprint) => norm(fingerprint) === wanted) &&
-            Array.isArray(item.relation) && item.relation.includes('delegate_permission/common.handle_all_urls')
+            item.target.sha256_cert_fingerprints.some(
+              fingerprint => norm(fingerprint) === wanted
+            ) &&
+            Array.isArray(item.relation) &&
+            item.relation.includes(
+              'delegate_permission/common.handle_all_urls'
+            )
           );
-          if (!valid) process.exit(2);
+
+          if (!valid) {
+            process.exit(2);
+          }
           NODE
           then
-            echo "- **Digital Asset Links:** o package ID e o fingerprint correspondem ao APK." >> "$GITHUB_STEP_SUMMARY"
             echo "Digital Asset Links corresponde ao APK."
+
+            echo "- Digital Asset Links: correspondência confirmada." \
+              >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "- **Digital Asset Links:** pendente — o package ID e/ou fingerprint do certificado não correspondem ao APK desta execução." >> "$GITHUB_STEP_SUMMARY"
-            echo "AVISO: o fingerprint SHA-256 desta chave não coincide com assetlinks.json."
+            echo "AVISO: o package ID ou fingerprint não corresponde."
+
+            echo "- Digital Asset Links: correspondência não confirmada." \
+              >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Publicar APK para transferência
